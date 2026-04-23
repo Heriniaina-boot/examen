@@ -12,6 +12,14 @@ pipeline {
         TRIVY_FS_REPORT      = "${TRIVY_REPORT_DIR}/trivy-fs-report.csv"
     }
 
+    
+    stages { 
+        stage('Checkout') { 
+            steps { 
+                git 'https://github.com/Heriniaina-boot/examen.git' 
+            } 
+        } 
+    } 
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timestamps()
