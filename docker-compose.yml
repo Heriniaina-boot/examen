@@ -1,0 +1,124 @@
+version: "3.9"
+
+# ═══════════════════════════════════════════════════════
+#  docker-compose.yml – Gestion des voitures
+#  Includes: app, MongoDB, Trivy security scanner
+# ═══════════════════════════════════════════════════════
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  trivy-cache:
+  trivy-reports:
+
+services:
+
+  # ─────────────────────────────────────────
+  # Application principale
+  # ─────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: gestion-voitures-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      MONGO_URI: mongodb://mongo:27017/gestion_voitures
+      PORT: 3000
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp
+
+  # ─────────────────────────────────────────
+  # Base de données MongoDB
+  # ─────────────────────────────────────────
+  mongo:
+    image: mongo:7.0-jammy
+    container_name: gestion-voitures-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+    environment:
+      MONGO_INITDB_DATABASE: gestion_voitures
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+  # ─────────────────────────────────────────
+  # Trivy – Scanner de sécurité
+  # Scanne l'image Docker et génère un rapport CSV
+  # ─────────────────────────────────────────
+  trivy:
+    image: aquasec/trivy:latest
+    container_name: trivy-scanner
+    volumes:
+      - trivy-cache:/root/.cache/trivy
+      - trivy-reports:/reports
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - app-network
+    # Scan the app image and output a CSV report with Low/Medium/Critical severities
+    command: >
+      image
+      --exit-code 0
+      --severity LOW,MEDIUM,CRITICAL
+      --format template
+      --template "@contrib/csv.tpl"
+      --output /reports/trivy-report.csv
+      --cache-dir /root/.cache/trivy
+      gestion-voitures-app
+    depends_on:
+      app:
+        condition: service_healthy
+    profiles:
+      - security
+
+  # ─────────────────────────────────────────
+  # Trivy – Scan du système de fichiers (code source)
+  # ─────────────────────────────────────────
+  trivy-fs:
+    image: aquasec/trivy:latest
+    container_name: trivy-fs-scanner
+    volumes:
+      - trivy-cache:/root/.cache/trivy
+      - trivy-reports:/reports
+      - .:/workspace:ro
+    command: >
+      fs
+      --exit-code 0
+      --severity LOW,MEDIUM,CRITICAL
+      --format template
+      --template "@contrib/csv.tpl"
+      --output /reports/trivy-fs-report.csv
+      --cache-dir /root/.cache/trivy
+      /workspace
+    profiles:
+      - security

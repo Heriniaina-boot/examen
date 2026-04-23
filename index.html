@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Gestion des voitures</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="container">
+    <h1>🚗 Gestion des voitures</h1>
+
+    <form id="carForm">
+      <input type="hidden" id="carId">
+      <input type="text" id="marque" placeholder="Marque" required>
+      <input type="text" id="modele" placeholder="Modèle" required>
+      <input type="number" id="annee" placeholder="Année" required>
+      <button type="submit">Enregistrer</button>
+    </form>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Marque</th>
+          <th>Modèle</th>
+          <th>Année</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="carList"></tbody>
+    </table>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
