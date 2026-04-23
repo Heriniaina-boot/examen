@@ -1,15 +1,11 @@
 version: "3.9"
 
-# ═══════════════════════════════════════════════════════
-#  docker-compose.yml – Gestion des voitures
-#  Includes: app, MongoDB, Trivy security scanner
-# ═══════════════════════════════════════════════════════
-
 networks:
   app-network:
     driver: bridge
 
 volumes:
+  jenkins_home:
   mongo-data:
   trivy-cache:
   trivy-reports:
@@ -17,7 +13,33 @@ volumes:
 services:
 
   # ─────────────────────────────────────────
-  # Application principale
+  # Jenkins CI/CD
+  # ─────────────────────────────────────────
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    user: root
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ─────────────────────────────────────────
+  # Application Node.js
   # ─────────────────────────────────────────
   app:
     build:
@@ -43,10 +65,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
-    # Security hardening
     security_opt:
       - no-new-privileges:true
-    read_only: false
     tmpfs:
       - /tmp
 
@@ -73,26 +93,25 @@ services:
       - no-new-privileges:true
 
   # ─────────────────────────────────────────
-  # Trivy – Scanner de sécurité
-  # Scanne l'image Docker et génère un rapport CSV
+  # Trivy - Scan image Docker
   # ─────────────────────────────────────────
   trivy:
     image: aquasec/trivy:latest
-    container_name: trivy-scanner
+    container_name: trivy-image-scanner
+    restart: no
     volumes:
       - trivy-cache:/root/.cache/trivy
       - trivy-reports:/reports
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - app-network
-    # Scan the app image and output a CSV report with Low/Medium/Critical severities
     command: >
       image
       --exit-code 0
       --severity LOW,MEDIUM,CRITICAL
       --format template
       --template "@contrib/csv.tpl"
-      --output /reports/trivy-report.csv
+      --output /reports/trivy-image-report.csv
       --cache-dir /root/.cache/trivy
       gestion-voitures-app
     depends_on:
@@ -102,15 +121,18 @@ services:
       - security
 
   # ─────────────────────────────────────────
-  # Trivy – Scan du système de fichiers (code source)
+  # Trivy - Scan code source
   # ─────────────────────────────────────────
   trivy-fs:
     image: aquasec/trivy:latest
     container_name: trivy-fs-scanner
+    restart: no
     volumes:
       - trivy-cache:/root/.cache/trivy
       - trivy-reports:/reports
       - .:/workspace:ro
+    networks:
+      - app-network
     command: >
       fs
       --exit-code 0
