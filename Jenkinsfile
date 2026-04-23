@@ -2,10 +2,6 @@ pipeline {
 
     agent any
 
-    tools {
-        nodejs 'NodeJS-20'
-    }
-
     environment {
         APP_NAME             = 'gestion-voitures'
         DOCKER_IMAGE         = "${APP_NAME}:${BUILD_NUMBER}"
@@ -34,6 +30,14 @@ pipeline {
                 echo '==> Checkout du code source'
                 checkout scm
                 sh 'git log --oneline -5'
+            }
+        }
+
+        stage('Check Node') {
+            steps {
+                echo '==> Verification de Node.js'
+                sh 'node --version'
+                sh 'npm --version'
             }
         }
 
