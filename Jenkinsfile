@@ -17,6 +17,9 @@ pipeline {
         timestamps()
         timeout(time: 30, unit: 'MINUTES')
         disableConcurrentBuilds()
+        // Ajout de wipeOutWorkspace pour garantir un espace de travail propre
+        // et éviter l'erreur "fatal : vous n'êtes pas dans un répertoire git"
+        skipDefaultCheckout()
     }
 
     triggers {
@@ -27,7 +30,9 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                echo '==> Checkout du code source'
+                echo '==> Nettoyage et Checkout du code source'
+                // Utilisation de deleteDir() pour s'assurer que le répertoire est vide avant le checkout
+                deleteDir()
                 checkout scm
                 sh 'git log --oneline -5'
             }
